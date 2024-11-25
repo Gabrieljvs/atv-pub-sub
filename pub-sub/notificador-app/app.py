@@ -16,7 +16,7 @@ EMAIL_PASSWORD = "senha"
 SMTP_SERVER = "smtp.example.com"
 SMTP_PORT = 587
 
-# Função para criar a notificação (rotate como exemplo)
+# Função para criar a notificação 
 def create_notificador(path_file):
     pathname, filename = os.path.split(path_file)
     output_folder = pathname + OUT_FOLDER
