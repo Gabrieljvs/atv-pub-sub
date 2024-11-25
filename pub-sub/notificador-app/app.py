@@ -24,12 +24,6 @@ def create_notificador(path_file):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    original_image = Image.open(path_file)
-    transposed = original_image.transpose(Image.Transpose.ROTATE_180)
-
-    name, ext = os.path.splitext(filename)
-    transposed.save(output_folder + name + NEW + ext)
-
     return filename  # Retorna o nome do arquivo original
 
 # Função para enviar mensagens no Telegram
