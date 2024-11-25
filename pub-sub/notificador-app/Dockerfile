@@ -2,7 +2,7 @@
 FROM python:3.8.13-alpine3.15
 
 # creates a dir for our application
-WORKDIR /rotate-app
+WORKDIR /notificador-app
 
 RUN apk add zlib-dev jpeg-dev gcc musl-dev librdkafka-dev
 
