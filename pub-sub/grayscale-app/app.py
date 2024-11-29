@@ -1,14 +1,17 @@
 from PIL import Image, ImageOps
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer, Producer, KafkaError
 import json
 import os
-from time import sleep
 import logging
 
 OUT_FOLDER = '/processed/grayscale/'
 NEW = '_grayscale'
 IN_FOLDER = "/appdata/static/uploads/"
 
+# Configuração do produtor Kafka
+p = Producer({'bootstrap.servers': 'kafka1:19091,kafka2:19092,kafka3:19093'})
+
+# Função para criar a imagem em escala de cinza
 def create_grayscale(path_file):
     pathname, filename = os.path.split(path_file)
     output_folder = pathname + OUT_FOLDER
@@ -22,8 +25,21 @@ def create_grayscale(path_file):
     name, ext = os.path.splitext(filename)
     gray_image.save(output_folder + name + NEW + ext)
 
-#sleep(30)
-### Consumer
+    return filename  # Retorna o nome do arquivo original
+
+
+# Função para publicar a transformação no Kafka
+def publicar_transformacao(filename):
+    notificacao = {
+        "timestamp": 1649288146.3453217,
+        "new_file": filename,
+        "transformacao": "grayscale"  # Campo indicando que a transformação foi grayscale
+    }
+    p.produce('image', json.dumps(notificacao))
+    p.flush()
+
+
+# Configuração do consumidor Kafka
 c = Consumer({
     'bootstrap.servers': 'kafka1:19091,kafka2:19092,kafka3:19093',
     'group.id': 'grayscale-group',
@@ -34,7 +50,8 @@ c = Consumer({
 })
 
 c.subscribe(['image'])
-#{"timestamp": 1649288146.3453217, "new_file": "9PKAyoN.jpeg"}
+
+# Exemplo de mensagem Kafka esperada: {"timestamp": 1649288146.3453217, "new_file": "9PKAyoN.jpeg"}
 
 try:
     while True:
@@ -44,16 +61,24 @@ try:
         elif not msg.error():
             data = json.loads(msg.value())
             filename = data['new_file']
-            logging.warning(f"READING {filename}")
-            create_grayscale(IN_FOLDER + filename)
-            logging.warning (f"ENDING {filename}")
+
+            logging.warning(f"PROCESSANDO {filename}")
+            # Converte a imagem para escala de cinza
+            arquivo_original = create_grayscale(IN_FOLDER + filename)
+            logging.warning(f"FINALIZADO {arquivo_original}")
+
+            # Publica no Kafka que a imagem foi convertida para grayscale
+            publicar_transformacao(arquivo_original)
+
         elif msg.error().code() == KafkaError._PARTITION_EOF:
-            logging.warning('End of partition reached {0}/{1}'
-                  .format(msg.topic(), msg.partition()))
+            logging.warning('Fim da partição alcançado {0}/{1}'
+                            .format(msg.topic(), msg.partition()))
         else:
-            logging.error('Error occured: {0}'.format(msg.error().str()))
+            logging.error('Erro ocorrido: {0}'.format(msg.error().str()))
 
 except KeyboardInterrupt:
     pass
 finally:
     c.close()
+    p.flush()
+

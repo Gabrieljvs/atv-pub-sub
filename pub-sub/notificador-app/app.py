@@ -1,4 +1,3 @@
-from PIL import Image
 import os
 from confluent_kafka import Consumer, Producer, KafkaError
 import json
@@ -7,24 +6,11 @@ import smtplib
 import requests
 
 # Configurações
-OUT_FOLDER = '/processed/notificador/'
-NEW = '_notificador'
-IN_FOLDER = "/appdata/static/uploads/"
 TELEGRAM_BOT_TOKEN = "SEU_TELEGRAM_BOT_TOKEN"
 EMAIL_SENDER = "seuemail@example.com"
 EMAIL_PASSWORD = "senha"
 SMTP_SERVER = "smtp.example.com"
 SMTP_PORT = 587
-
-# Função para criar a notificação 
-def create_notificador(path_file):
-    pathname, filename = os.path.split(path_file)
-    output_folder = pathname + OUT_FOLDER
-
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    return filename  # Retorna o nome do arquivo original
 
 # Função para enviar mensagens no Telegram
 def enviar_telegram(telegram_id, mensagem):
@@ -57,11 +43,10 @@ c = Consumer({
     'default.topic.config': {'auto.offset.reset': 'smallest'}
 })
 
-# Configuração do produtor Kafka
-p = Producer({'bootstrap.servers': 'kafka1:19091,kafka2:19092,kafka3:19093'})
-
 c.subscribe(['image'])
-# Formato esperado: {"timestamp": 1649288146.3453217, "new_file": "9PKAyoN.jpeg", "email": "destino@example.com", "telegram_id": "123456789"}
+
+# Formato esperado da mensagem Kafka:
+# {"timestamp": 1649288146.3453217, "new_file": "9PKAyoN_rotate.jpeg", "email": "destino@example.com", "telegram_id": "123456789", "transformacao": "rotate"}
 
 try:
     while True:
@@ -73,25 +58,19 @@ try:
             filename = data['new_file']
             email = data.get('email', None)
             telegram_id = data.get('telegram_id', None)
-            
-            logging.warning(f"PROCESSANDO {filename}")
-            arquivo_original = create_notificador(IN_FOLDER + filename)
-            logging.warning(f"FINALIZADO {filename}")
+            transformacao = data.get('transformacao', 'desconhecida')
 
-            # Criar mensagem de notificação
-            mensagem = f"O arquivo {arquivo_original} foi rotacionado."
-            
-            # Publicar no tópico de notificação
-            notificacao = {
-                "arquivo_original": arquivo_original,
-                "mensagem": mensagem,
-                "email": email,
-                "telegram_id": telegram_id
-            }
-            p.produce('notificacao', json.dumps(notificacao))
-            p.flush()
+            # Criar mensagem de notificação baseada na transformação
+            if transformacao == "rotate":
+                mensagem = f"O arquivo {filename} foi rotacionado."
+            elif transformacao == "grayscale":
+                mensagem = f"O arquivo {filename} foi convertido para escala de cinza."
+            else:
+                mensagem = f"Uma transformação desconhecida foi realizada no arquivo {filename}."
 
-            # Enviar notificações diretamente (opcional)
+            logging.info(f"Notificação criada: {mensagem}")
+
+            # Enviar notificações diretamente (e-mail e Telegram)
             if email:
                 enviar_email(email, mensagem)
             if telegram_id:
@@ -107,4 +86,3 @@ except KeyboardInterrupt:
     pass
 finally:
     c.close()
-    p.flush()
